@@ -80,6 +80,17 @@ pub fn find_dapp_json_contract(path: &str, name: &str) -> eyre::Result<Contract>
     Ok(serde_json::from_value(contract)?)
 }
 
+pub fn get_contract_json_path(contract_name: &str)-> PathBuf {
+    let path =  format!("./out/{0}/{0}.sol/{0}.json",contract_name);
+    PathBuf::from(path)
+}
+
+pub fn find_contract_json(name: &str) -> eyre::Result<Contract> {
+    let contract_json  = get_contract_json_path(name);
+    let file = std::io::BufReader::new(std::fs::File::open(&contract_json)?);
+    Ok(serde_json::from_reader(file).wrap_err_with(|| format!("Failed to read `contract.{}`", name))?)
+}
+
 pub fn find_git_root_path() -> eyre::Result<PathBuf> {
     let path = Command::new("git").args(&["rev-parse", "--show-toplevel"]).output()?.stdout;
     let path = std::str::from_utf8(&path)?.trim_end_matches('\n');
