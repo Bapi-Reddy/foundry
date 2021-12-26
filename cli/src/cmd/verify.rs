@@ -1,19 +1,19 @@
 //! Verify contract source on etherscan
 
 use crate::opts::forge::ContractInfo;
-use crate::{cmd::Cmd, utils};
+use crate::{cmd::{build::BuildArgs,Cmd}, utils};
 use cast::SimpleCast;
+use eyre::Result;
 use ethers::{
     abi::{Address, Contract, Function},
     core::types::Chain,
-    etherscan::{contract::VerifyContract, Client},
+    etherscan::{contract::VerifyContract, Client, Response},
     prelude::{
         artifacts::{BytecodeObject, Source, Sources},
         Middleware, MinimalCombinedArtifacts, Project, ProjectCompileOutput, Provider,
     },
     solc::cache::SolFilesCache,
 };
-use http::Response;
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -23,6 +23,9 @@ pub struct VerifyArgs {
     #[structopt(help = "contract source info `<path>:<contractname>` or `<contractname>`")]
     contract: ContractInfo,
 
+    #[structopt(flatten)]
+    opts: BuildArgs,
+
     #[structopt(help = "deployed contract `address`")]
     address: Address,
 
@@ -31,10 +34,12 @@ pub struct VerifyArgs {
 }
 
 impl Cmd for VerifyArgs {
-    fn run(self) -> eyre::Result<()> {
+    type Output = ();
+
+    fn run(self) -> Result<Self::Output> {
         let etherscan_api_key = utils::etherscan_api_key()?;
         let rt = tokio::runtime::Runtime::new().expect("could not start tokio rt");
-        let chain = rt.block_on(self.get_chain());
+        let chain = rt.block_on(self.get_chain()).unwrap();
         let project = self.opts.project()?;
         println!("compiling...");
         let compiled = project.compile()?;
@@ -45,7 +50,7 @@ impl Cmd for VerifyArgs {
         };
 
         let mut constructor_args = None;
-        if let Some(constructor) = abi.unwrap().constructor {
+        if let Some(constructor) = abi.constructor {
             // convert constructor into function
             #[allow(deprecated)]
             let fun = Function {
@@ -56,7 +61,7 @@ impl Cmd for VerifyArgs {
                 state_mutability: Default::default(),
             };
 
-            constructor_args = Some(SimpleCast::calldata(fun.abi_signature(), &self.args)?);
+            constructor_args = Some(SimpleCast::calldata(fun.signature(), &self.args)?);
         } else if !self.args.is_empty() {
             eyre::bail!("No constructor found but contract arguments provided")
         }
@@ -74,7 +79,7 @@ impl Cmd for VerifyArgs {
             .map_err(|err| eyre::eyre!("Failed to create etherscan client: {}", err))?;
 
         let contract =
-            VerifyContract::new(self.address, self.contract.path, self.get_compiler_version())
+            VerifyContract::new(self.address, self.contract.path.unwrap(), self.get_compiler_version())
                 .constructor_arguments(constructor_args);
 
         let resp = rt.block_on(self.submit(contract, etherscan));
@@ -107,7 +112,7 @@ impl Cmd for VerifyArgs {
 impl VerifyArgs {
     async fn get_chain(self) -> Result<u64> {
         let rpc_url = utils::rpc_url();
-        let provider = Provider::try_from(self.rpc_url)?;
+        let provider = Provider::try_from(rpc_url)?;
         let chain = provider
             .get_chainid()
             .await
@@ -127,18 +132,19 @@ impl VerifyArgs {
         Ok(chain)
     }
 
-    async fn submit(contract: VerifyContract, etherscan: Client) -> Result<Response<String>> {
-        etherscan
+    async fn submit(self, contract: VerifyContract, etherscan: Client) -> Result<Response<String>> {
+        let response = etherscan
             .submit_contract_verification(&contract)
             .await
             .map_err(|err| eyre::eyre!("Failed to submit contract verification: {}", err))?;
+        Ok(response)
     }
 
     // TODO: These are imported from CreateArgs in creat.rs need to link them up
     fn get_artifact_from_name(
         &self,
         compiled: ProjectCompileOutput<MinimalCombinedArtifacts>,
-    ) -> Result<(Contract, BytecodeObject)> {
+    ) -> eyre::Result<(Contract, BytecodeObject)> {
         let mut has_found_contract = false;
         let mut contract_artifact = None;
 
@@ -174,7 +180,7 @@ impl VerifyArgs {
         &self,
         project: &Project,
         path: String,
-    ) -> Result<(Contract, BytecodeObject)> {
+    ) -> eyre::Result<(Contract, BytecodeObject)> {
         // Get sources from the requested location
         let abs_path = std::fs::canonicalize(PathBuf::from(path))?;
         let mut sources = Sources::new();
@@ -207,7 +213,8 @@ impl VerifyArgs {
     }
 
     fn get_compiler_version(self) -> String {
-        let contract_reader = std::io::BufReader::new(std::fs::File::open(self.contract.path)?);
+        let path =  PathBuf::from(self.contract.path.unwrap());
+        let contract_reader = std::io::BufReader::new(std::fs::File::open(&path));
         let compiler_line =
             contract_reader.lines().find(|line| line.unwrap().starts_with("pragma solidity"));
         compiler_line.split_whitespace().nth(2).unwrap();
