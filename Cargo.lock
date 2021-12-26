@@ -1523,6 +1523,7 @@ dependencies = [
  "forge",
  "foundry-utils",
  "glob",
+ "http",
  "once_cell",
  "proptest",
  "regex",

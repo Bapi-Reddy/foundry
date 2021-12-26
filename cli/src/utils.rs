@@ -55,41 +55,8 @@ pub fn dapp_json_path() -> PathBuf {
     PathBuf::from(DAPP_JSON)
 }
 
-/// Tries to extract the `Contract` in the `DAPP_JSON` file
-pub fn find_dapp_json_contract(path: &str, name: &str) -> eyre::Result<Contract> {
-    let dapp_json = dapp_json_path();
-    let file = std::io::BufReader::new(std::fs::File::open(&dapp_json)?);
-    let mut value: serde_json::Value =
-        serde_json::from_reader(file).wrap_err("Failed to read DAPP_JSON artifacts")?;
 
-    let contracts = value["contracts"]
-        .as_object_mut()
-        .wrap_err_with(|| format!("No `contracts` found in `{}`", dapp_json.display()))?;
 
-    let contract = if let serde_json::Value::Object(mut contract) = contracts[path].take() {
-        contract
-            .remove(name)
-            .wrap_err_with(|| format!("No contract found at `.contract.{}.{}`", path, name))?
-    } else {
-        let key = format!("{}:{}", path, name);
-        contracts
-            .remove(&key)
-            .wrap_err_with(|| format!("No contract found at `.contract.{}`", key))?
-    };
-
-    Ok(serde_json::from_value(contract)?)
-}
-
-pub fn get_contract_json_path(contract_name: &str)-> PathBuf {
-    let path =  format!("./out/{0}/{0}.sol/{0}.json",contract_name);
-    PathBuf::from(path)
-}
-
-pub fn find_contract_json(name: &str) -> eyre::Result<Contract> {
-    let contract_json  = get_contract_json_path(name);
-    let file = std::io::BufReader::new(std::fs::File::open(&contract_json)?);
-    Ok(serde_json::from_reader(file).wrap_err_with(|| format!("Failed to read `contract.{}`", name))?)
-}
 
 pub fn find_git_root_path() -> eyre::Result<PathBuf> {
     let path = Command::new("git").args(&["rev-parse", "--show-toplevel"]).output()?.stdout;
