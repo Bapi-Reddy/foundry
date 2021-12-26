@@ -1,9 +1,8 @@
 use structopt::StructOpt;
 
-use ethers::types::Address;
 use std::{path::PathBuf, str::FromStr};
 
-use crate::cmd::{build::BuildArgs, create, snapshot, test};
+use crate::cmd::{build::BuildArgs, create, snapshot, test, verify};
 
 #[derive(Debug, StructOpt)]
 pub struct Opts {
@@ -54,17 +53,8 @@ pub enum Subcommands {
         lib_paths: Vec<PathBuf>,
     },
 
-    #[structopt(
-        about = "verify your smart contracts source code on Etherscan. Requires `ETHERSCAN_API_KEY` to be set."
-    )]
-    VerifyContract {
-        #[structopt(help = "contract source info `<path>:<contractname>`")]
-        contract: FullContractInfo,
-        #[structopt(help = "the address of the contract to verify.")]
-        address: Address,
-        #[structopt(help = "constructor args calldata arguments.")]
-        constructor_args: Vec<String>,
-    },
+    #[structopt( about = "verify your smart contracts source code on Etherscan. Requires `ETHERSCAN_API_KEY` to be set.")]
+    VerifyContract(verify::VerifyArgs),
 
     #[structopt(alias = "c", about = "deploy a compiled contract")]
     Create(create::CreateArgs),

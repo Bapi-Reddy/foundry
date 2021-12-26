@@ -1,10 +1,10 @@
 //! Verify contract source on etherscan
 
-use crate::{cmd::Cmd, utils};
-
 use crate::opts::forge::ContractInfo;
+use crate::{cmd::Cmd, utils};
+use cast::SimpleCast;
 use ethers::{
-    abi::{Address, Contract},
+    abi::{Address, Contract, Function},
     core::types::Chain,
     etherscan::{contract::VerifyContract, Client},
     prelude::{
@@ -13,10 +13,10 @@ use ethers::{
     },
     solc::cache::SolFilesCache,
 };
+use http::Response;
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use http::Response;
 
 #[derive(Debug, Clone, StructOpt)]
 pub struct VerifyArgs {
@@ -35,6 +35,32 @@ impl Cmd for VerifyArgs {
         let etherscan_api_key = utils::etherscan_api_key()?;
         let rt = tokio::runtime::Runtime::new().expect("could not start tokio rt");
         let chain = rt.block_on(self.get_chain());
+        let project = self.opts.project()?;
+        println!("compiling...");
+        let compiled = project.compile()?;
+
+        let (abi, _) = match self.contract.path {
+            Some(ref path) => self.get_artifact_from_path(&project, path.clone())?,
+            None => self.get_artifact_from_name(compiled)?,
+        };
+
+        let mut constructor_args = None;
+        if let Some(constructor) = abi.unwrap().constructor {
+            // convert constructor into function
+            #[allow(deprecated)]
+            let fun = Function {
+                name: "constructor".to_string(),
+                inputs: constructor.inputs,
+                outputs: vec![],
+                constant: false,
+                state_mutability: Default::default(),
+            };
+
+            constructor_args = Some(SimpleCast::calldata(fun.abi_signature(), &self.args)?);
+        } else if !self.args.is_empty() {
+            eyre::bail!("No constructor found but contract arguments provided")
+        }
+
         let chain = match chain {
             1 => Chain::Mainnet,
             3 => Chain::Ropsten,
@@ -49,7 +75,7 @@ impl Cmd for VerifyArgs {
 
         let contract =
             VerifyContract::new(self.address, self.contract.path, self.get_compiler_version())
-                .constructor_arguments(self.constructor_args);
+                .constructor_arguments(constructor_args);
 
         let resp = rt.block_on(self.submit(contract, etherscan));
         if resp.status == "0" {
@@ -101,10 +127,7 @@ impl VerifyArgs {
         Ok(chain)
     }
 
-    async fn submit(
-        contract: VerifyContract,
-        etherscan: Client,
-    ) -> Result<Response<String>> {
+    async fn submit(contract: VerifyContract, etherscan: Client) -> Result<Response<String>> {
         etherscan
             .submit_contract_verification(&contract)
             .await
@@ -190,4 +213,3 @@ impl VerifyArgs {
         compiler_line.split_whitespace().nth(2).unwrap();
     }
 }
-

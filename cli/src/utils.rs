@@ -1,6 +1,5 @@
-use ethers::solc::{artifacts::Contract, EvmVersion};
+use ethers::solc::EvmVersion;
 
-use eyre::{ContextCompat, WrapErr};
 use std::{
     env::VarError,
     path::{Path, PathBuf},
