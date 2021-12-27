@@ -3,7 +3,6 @@
 use crate::opts::forge::ContractInfo;
 use crate::{cmd::{build::BuildArgs,Cmd}, utils};
 use cast::SimpleCast;
-use eyre::Result;
 use ethers::{
     abi::{Address, Contract, Function},
     core::types::Chain,
@@ -15,9 +14,9 @@ use ethers::{
     solc::cache::SolFilesCache,
 };
 use std::convert::TryFrom;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use structopt::StructOpt;
-
+use std::io::{BufRead, BufReader};
 #[derive(Debug, Clone, StructOpt)]
 pub struct VerifyArgs {
     #[structopt(help = "contract source info `<path>:<contractname>` or `<contractname>`")]
@@ -36,18 +35,19 @@ pub struct VerifyArgs {
 impl Cmd for VerifyArgs {
     type Output = ();
 
-    fn run(self) -> Result<Self::Output> {
+    fn run(self) -> eyre::Result<Self::Output> {
         let etherscan_api_key = utils::etherscan_api_key()?;
         let rt = tokio::runtime::Runtime::new().expect("could not start tokio rt");
         let chain = rt.block_on(self.get_chain()).unwrap();
         let project = self.opts.project()?;
         println!("compiling...");
-        let compiled = project.compile()?;
 
-        let (abi, _) = match self.contract.path {
-            Some(ref path) => self.get_artifact_from_path(&project, path.clone())?,
-            None => self.get_artifact_from_name(compiled)?,
-        };
+        if self.contract.path.is_none() {
+            eyre::bail!("verifying requires giving out the source path");
+        }
+        let contract_path  = self.contract.path.unwrap();
+        let contract_address = self.address;
+        let (abi, _) = self.get_artifact_from_path(&project, contract_path.clone())?;
 
         let mut constructor_args = None;
         if let Some(constructor) = abi.constructor {
@@ -77,40 +77,46 @@ impl Cmd for VerifyArgs {
         };
         let etherscan = Client::new(chain, etherscan_api_key)
             .map_err(|err| eyre::eyre!("Failed to create etherscan client: {}", err))?;
-
-        let contract =
-            VerifyContract::new(self.address, self.contract.path.unwrap(), self.get_compiler_version())
+        let compiler_version = self.get_compiler_version().unwrap();
+        let contract =  VerifyContract::new(contract_address.clone(), contract_path, compiler_version)
                 .constructor_arguments(constructor_args);
 
-        let resp = rt.block_on(self.submit(contract, etherscan));
-        if resp.status == "0" {
-            if resp.message == "Contract source code already verified" {
-                println!("Contract source code already verified.");
-                Ok(())
-            } else {
-                eyre::bail!(
-                    "Encountered an error verifying this contract:\nResponse: `{}`\nDetails: `{}`",
-                    resp.message,
-                    resp.result
-                );
+        let response = rt.block_on(self.submit(contract, etherscan));
+
+        match response {
+            Ok(resp) => {
+                if resp.status == "0" {
+                    if resp.message == "Contract source code already verified" {
+                        println!("Contract source code already verified.");
+                        Ok(())
+                    } else {
+                        eyre::bail!(
+                            "Encountered an error verifying this contract:\nResponse: `{}`\nDetails: `{}`",
+                            resp.message,
+                            resp.result
+                        );
+                    }
+                } else {
+                    println!(
+                        r#"Submitted contract for verification:
+                        Response: `{}`
+                        GUID: `{}`
+                        url: {}#code"#,
+                        resp.message,
+                        resp.result,
+                        etherscan.address_url(contract_address.clone())
+                    );
+                    Ok(())
+                }
             }
-        } else {
-            println!(
-                r#"Submitted contract for verification:
-                Response: `{}`
-                GUID: `{}`
-                url: {}#code"#,
-                resp.message,
-                resp.result,
-                etherscan.address_url(self.address)
-            );
-            Ok(())
+            Err(err) => Err(err),
         }
+        
     }
 }
 
 impl VerifyArgs {
-    async fn get_chain(self) -> Result<u64> {
+    async fn get_chain(self) -> eyre::Result<u64> {
         let rpc_url = utils::rpc_url();
         let provider = Provider::try_from(rpc_url)?;
         let chain = provider
@@ -132,7 +138,7 @@ impl VerifyArgs {
         Ok(chain)
     }
 
-    async fn submit(self, contract: VerifyContract, etherscan: Client) -> Result<Response<String>> {
+    async fn submit(self, contract: VerifyContract, etherscan: Client) -> eyre::Result<Response<String>> {
         let response = etherscan
             .submit_contract_verification(&contract)
             .await
@@ -212,11 +218,17 @@ impl VerifyArgs {
         ))
     }
 
-    fn get_compiler_version(self) -> String {
-        let path =  PathBuf::from(self.contract.path.unwrap());
-        let contract_reader = std::io::BufReader::new(std::fs::File::open(&path));
-        let compiler_line =
-            contract_reader.lines().find(|line| line.unwrap().starts_with("pragma solidity"));
-        compiler_line.split_whitespace().nth(2).unwrap();
+    // TODO: used unwrap a lot instead of error handling 
+    fn get_compiler_version(self) -> Option<String> {
+        let file  = std::fs::File::open(Path::new(&self.contract.path.unwrap())).unwrap();
+        
+        let mut compiler_line;
+        for line in BufReader::new(file).lines() {
+            compiler_line = line.unwrap();
+            if compiler_line.contains("pragma solidity") {
+                return  Some(compiler_line.split_whitespace().nth(2).unwrap().to_string());
+            }
+        }
+        return None;
     }
 }
