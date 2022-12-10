@@ -1,7 +1,8 @@
 //! The `anvil` cli
 use anvil::cmd::NodeArgs;
 use clap::{CommandFactory, Parser, Subcommand};
-
+use yansi::Paint;
+use std::fmt::Write;
 /// A fast local Ethereum development node.
 #[derive(Debug, Parser)]
 #[clap(name = "anvil", version = anvil::VERSION_MESSAGE, next_display_order = None)]
@@ -27,6 +28,9 @@ pub enum Commands {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = App::parse();
+    let mut config_string: String = "".to_owned();
+    let _ = write!(config_string, "\n{}", Paint::green("---------------parsing------------------------------"));
+    println!("{}", config_string);
 
     if let Some(ref cmd) = app.cmd {
         match cmd {
