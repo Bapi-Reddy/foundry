@@ -10,6 +10,8 @@ use axum::{
 };
 use futures::{future, FutureExt};
 use tracing::{trace, warn};
+use yansi::Paint;
+use std::fmt::Write;
 
 /// Handles incoming JSON-RPC Request
 pub async fn handle<Handler: RpcHandler>(
@@ -21,6 +23,7 @@ pub async fn handle<Handler: RpcHandler>(
             warn!(target: "rpc", ?err, "invalid request");
             Response::error(RpcError::invalid_request()).into()
         }
+        // create a string that parses the request method and prints it
         Ok(req) => handle_request(req.0, handler)
             .await
             .unwrap_or_else(|| Response::error(RpcError::invalid_request()))
@@ -56,6 +59,10 @@ pub async fn handle_request<Handler: RpcHandler>(
 async fn handle_call<Handler: RpcHandler>(call: RpcCall, handler: Handler) -> Option<RpcResponse> {
     match call {
         RpcCall::MethodCall(call) => {
+            let mut config_string: String = "".to_owned();
+            let _ = write!(config_string, "\n{}", Paint::yellow("method being called is:".to_owned()+&call.method));
+            println!("{}", config_string);
+
             trace!(target: "rpc", id = ?call.id , method = ?call.method,  "handling call");
             Some(handler.on_call(call).await)
         }

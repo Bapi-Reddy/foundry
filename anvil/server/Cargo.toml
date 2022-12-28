@@ -30,6 +30,7 @@ serde_json = "1.0.67"
 serde = { version = "1.0.136", features = ["derive"] }
 async-trait = "0.1.53"
 thiserror = "1.0.34"
+yansi = "0.5.1"
 
 clap = { version = "4.0", features = ["derive", "env"], optional = true }
 pin-project = "1.0.12"
