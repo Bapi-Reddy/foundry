@@ -4,7 +4,7 @@
 
 ![Github Actions][gha-badge] [![Telegram Chat][tg-badge]][tg-url] [![Telegram Support][tg-support-badge]][tg-support-url]
 
-[gha-badge]: https://img.shields.io/github/workflow/status/foundry-rs/foundry/test?style=flat-square
+[gha-badge]: https://img.shields.io/github/actions/workflow/status/foundry-rs/foundry/test.yml?branch=master
 [tg-badge]: https://img.shields.io/endpoint?color=neon&logo=telegram&label=chat&style=flat-square&url=https%3A%2F%2Ftg.sumanjay.workers.dev%2Ffoundry_rs
 [tg-url]: https://t.me/foundry_rs
 [tg-support-badge]: https://img.shields.io/endpoint?color=neon&logo=telegram&label=support&style=flat-square&url=https%3A%2F%2Ftg.sumanjay.workers.dev%2Ffoundry_support
@@ -16,7 +16,8 @@ Foundry consists of:
 
 -   [**Forge**](./forge): Ethereum testing framework (like Truffle, Hardhat and DappTools).
 -   [**Cast**](./cast): Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   [**Anvil**](./anvil): local Ethereum node, akin to Ganache, Hardhat Network.
+-   [**Anvil**](./anvil): Local Ethereum node, akin to Ganache, Hardhat Network.
+-   [**Chisel**](./chisel): Fast, utilitarian, and verbose solidity REPL.
 
 **Need help getting started with Foundry? Read the [📖 Foundry Book][foundry-book] (WIP)!**
 
@@ -24,54 +25,9 @@ Foundry consists of:
 
 ## Installation
 
-_Having issues? See the [troubleshooting section](#troubleshooting-installation)_.
+See the [installation guide](https://book.getfoundry.sh/getting-started/installation) in the book.
 
-First run the command below to get `foundryup`, the Foundry toolchain installer:
-
-```sh
-curl -L https://foundry.paradigm.xyz | bash
-```
-
-If you do not want to use the redirect, feel free to manually download the foundryup installation script from [here](https://raw.githubusercontent.com/foundry-rs/foundry/master/foundryup/install).
-
-Then, run `foundryup` in a new terminal session or after reloading your `PATH`.
-
-Other ways to use `foundryup`, and other documentation, can be found [here](./foundryup). Happy forging!
-
-### Installing from Source
-
-For people that want to install from source, you can do so like below:
-
-```sh
-git clone https://github.com/foundry-rs/foundry
-cd foundry
-# install cast + forge
-cargo install --path ./cli --profile local --bins --locked --force
-# install anvil
-cargo install --path ./anvil --profile local --locked --force
-```
-
-Or via `cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil`.
-
-### Installing for CI in Github Action
-
-See [https://github.com/foundry-rs/foundry-toolchain](https://github.com/foundry-rs/foundry-toolchain) GitHub Action.
-
-### Installing via Docker
-
-Foundry maintains a [Docker image repository](https://github.com/foundry-rs/foundry/pkgs/container/foundry).
-
-You can pull the latest release image like so:
-
-```sh
-docker pull ghcr.io/foundry-rs/foundry:latest
-```
-
-For examples and guides on using this image, see the [Docker section](https://book.getfoundry.sh/tutorials/foundry-docker.html) in the book.
-
-### Manual Download
-
-You can manually download nightly releases [here](https://github.com/foundry-rs/foundry/releases).
+If you're experiencing any issues while installing, check out [Getting Help](#getting-help) and the [FAQ](https://book.getfoundry.sh/faq).
 
 ## Forge
 
@@ -137,7 +93,7 @@ By default `forge config` shows the currently selected foundry profile and its v
 
 ### DappTools Compatibility
 
-You can re-use your `.dapprc` environment variables by running `source .dapprc` beforehand using a Foundry tool.
+You can re-use your `.dapprc` environment variables by running `source .dapprc` before using a Foundry tool.
 
 ### Additional Configuration
 
@@ -145,35 +101,6 @@ You can find additional setup and configurations guides in the [Foundry Book][fo
 
 -   [Setting up VSCode][vscode-setup]
 -   [Shell autocompletions][shell-setup]
-
-### Troubleshooting Installation
-
-#### `libusb` Error When Running `forge`/`cast`
-
-If you are using the binaries as released, you may see the following error on MacOS:
-
-```sh
-dyld: Library not loaded: /usr/local/opt/libusb/lib/libusb-1.0.0.dylib
-```
-
-In order to fix this, you must install `libusb` like so:
-
-```sh
-brew install libusb
-```
-
-#### Out of Date `GLIBC` Error When Running `forge` From Default `foundryup` Install:
-
-If you run into an error resembling the following when using `foundryup`:
-
-```sh
-forge: /lib/x86_64-linux-gnu/libc.so.6: version 'GLIBC_2.29' not found (required by forge)
-```
-
-There are 2 workarounds:
-
-1. Building from source: `foundryup -b master`
-2. [Using Docker](https://book.getfoundry.sh/getting-started/installation.html#using-with-docker)
 
 ## Contributing
 
